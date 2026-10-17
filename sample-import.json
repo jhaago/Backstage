@@ -1,0 +1,22 @@
+{
+  "name": "Example production",
+  "year": "2027",
+  "roles": [{ "name": "Front Stage" }, { "name": "Props" }],
+  "performers": [{ "name": "Alex" }, { "name": "Sam" }],
+  "scenes": [
+    {
+      "title": "Opening",
+      "roles": {
+        "Front Stage": {
+          "notes": "Wait at the left entrance.\nBring on the ensemble when the scene begins.",
+          "performers": [
+            { "name": "Alex", "character": "Narrator" },
+            { "name": "Sam", "character": "Ensemble" }
+          ]
+        },
+        "Props": { "notes": "Place the table before the scene." }
+      }
+    },
+    { "title": "The journey", "roles": {} }
+  ]
+}

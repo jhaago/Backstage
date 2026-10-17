@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function admin() { return signed() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+  function member(p) { return signed() && exists(/databases/$(database)/documents/productions/$(p)/access/$(request.auth.uid)) && exists(/databases/$(database)/documents/invites/$(get(/databases/$(database)/documents/productions/$(p)/access/$(request.auth.uid)).data.invitationId)); }
+  function selected(p) { return get(/databases/$(database)/documents/productions/$(p)/access/$(request.auth.uid)).data.roleId; }
+  function ownRole(p,r) { return member(p) && selected(p)==r; }
+  function noteFields() { return request.resource.data.keys().hasOnly(['sceneId','roleId','notes','assignments','revision']) && request.resource.data.notes is string && request.resource.data.notes.size()<=20000 && request.resource.data.assignments is list && request.resource.data.assignments.size()<=200; }
+  match /admins/{uid} { allow get: if signed() && request.auth.uid==uid; allow list,write: if false; }
+  match /config/{id} { allow read,write: if admin(); }
+  match /invites/{token} { allow get: if signed(); allow list: if admin(); allow write: if admin(); }
+  match /productions/{p} {
+   allow read: if admin() || member(p);
+   allow create,delete: if admin();
+   allow update: if admin() && request.resource.data.liveRevision is int && request.resource.data.liveRevision>=resource.data.liveRevision;
+   match /access/{uid} {
+    allow get: if admin() || (signed() && request.auth.uid==uid);
+    allow list: if admin();
+    allow create: if signed() && request.auth.uid==uid && request.resource.data.keys().hasOnly(['invitationId','roleId']) && request.resource.data.invitationId is string && exists(/databases/$(database)/documents/invites/$(request.resource.data.invitationId)) && get(/databases/$(database)/documents/invites/$(request.resource.data.invitationId)).data.productionId==p && (request.resource.data.roleId=='' || exists(/databases/$(database)/documents/productions/$(p)/roles/$(request.resource.data.roleId)));
+    allow update: if signed() && request.auth.uid==uid && request.resource.data.keys().hasOnly(['invitationId','roleId']) && request.resource.data.invitationId is string && exists(/databases/$(database)/documents/invites/$(request.resource.data.invitationId)) && get(/databases/$(database)/documents/invites/$(request.resource.data.invitationId)).data.productionId==p && (request.resource.data.roleId=='' || exists(/databases/$(database)/documents/productions/$(p)/roles/$(request.resource.data.roleId)));
+    allow delete: if admin();
+   }
+   match /roles/{r} { allow read: if admin() || member(p); allow write: if admin(); }
+   match /scenes/{s} { allow read: if admin() || member(p); allow write: if admin(); }
+   match /performers/{id} {
+    allow read: if admin() || member(p);
+    allow create,update: if (admin() || member(p)) && request.resource.data.keys().hasOnly(['name']) && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=120;
+    allow delete: if admin();
+   }
+   match /roleNotes/{id} {
+    allow get: if admin() || (member(p) && id.matches('.*_' + selected(p)));
+    allow list: if admin();
+    allow create: if (admin() || ownRole(p,request.resource.data.roleId)) && noteFields() && id==request.resource.data.sceneId+'_'+request.resource.data.roleId && request.resource.data.revision==1 && exists(/databases/$(database)/documents/productions/$(p)/scenes/$(request.resource.data.sceneId));
+    allow update: if (admin() || ownRole(p,resource.data.roleId)) && noteFields() && request.resource.data.sceneId==resource.data.sceneId && request.resource.data.roleId==resource.data.roleId && request.resource.data.revision==resource.data.revision+1;
+    allow delete: if admin();
+   }
+   match /ready/{id} {
+    allow get: if admin() || (member(p) && id.matches('.*_' + selected(p)));
+    allow list: if admin();
+    allow create,update: if (admin() || ownRole(p,request.resource.data.roleId)) && request.resource.data.keys().hasOnly(['sceneId','roleId','ready']) && request.resource.data.ready is bool && id==request.resource.data.sceneId+'_'+request.resource.data.roleId && exists(/databases/$(database)/documents/productions/$(p)/scenes/$(request.resource.data.sceneId));
+    allow delete: if admin();
+   }
+  }
+ }
+}
