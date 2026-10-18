@@ -16,7 +16,32 @@ export type Production = {
   archived: boolean;
   liveSceneId: string | null;
   liveRevision: number;
+  controllerReadyRoleId?: string | null;
 };
+export type ReadinessStatus = {
+  sceneId: string;
+  roleId: string;
+  ready: boolean;
+};
+export function controllerReadiness(
+  roleId: string | null | undefined,
+  roles: Role[],
+  upcomingSceneId: string | null | undefined,
+  statuses: ReadinessStatus[],
+  synchronized: boolean,
+): "show-end" | "no-role" | "unavailable" | "ready" | "not-ready" {
+  if (!upcomingSceneId) return "show-end";
+  if (!roleId || !roles.some((role) => role.id === roleId)) return "no-role";
+  if (!synchronized) return "unavailable";
+  return statuses.some(
+    (status) =>
+      status.roleId === roleId &&
+      status.sceneId === upcomingSceneId &&
+      status.ready,
+  )
+    ? "ready"
+    : "not-ready";
+}
 export const ordered = <T extends { order: number }>(items: T[]) =>
   [...items].sort((a, b) => a.order - b.order);
 export const readyKey = (sceneId: string, roleId: string) =>

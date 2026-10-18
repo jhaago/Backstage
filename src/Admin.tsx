@@ -12,7 +12,6 @@ import {
   LogOut,
   Plus,
   Radio,
-  RotateCcw,
   Settings2,
   Trash2,
   Users,
@@ -46,6 +45,7 @@ import {
   ordered,
   nextScene,
   duplicateNames,
+  controllerReadiness,
   type Production,
   type Role,
   type Scene,
@@ -67,8 +67,12 @@ export function Admin({ onExit }: { onExit: () => void }) {
     [newName, setNewName] = useState(""),
     [newYear, setNewYear] = useState(""),
     [importData, setImportData] = useState<ImportData | null>(null),
-    [previewId, setPreviewId] = useState(""),
-    [editRole, setEditRole] = useState("");
+    [selectedSceneId, setSelectedSceneId] = useState(""),
+    [editTarget, setEditTarget] = useState<{
+      productionId: string;
+      sceneId: string;
+      roleId: string;
+    } | null>(null);
   const productions = productionsState.value,
     selected =
       selectedId ||
@@ -98,11 +102,47 @@ export function Admin({ onExit }: { onExit: () => void }) {
     liveIndex = scenes.findIndex((s) => s.id === p?.liveSceneId),
     next = nextScene(scenes, p?.liveSceneId ?? null),
     following = next ? nextScene(scenes, next.id) : null,
-    preview =
-      scenes.find((s) => s.id === previewId) ?? scenes[liveIndex] ?? scenes[0],
-    previewIndex = scenes.findIndex((s) => s.id === preview?.id),
+    scene =
+      tab === "control"
+        ? scenes[liveIndex]
+        : (scenes.find((s) => s.id === selectedSceneId) ??
+          scenes[liveIndex] ??
+          scenes[0]),
     online = useOnline(),
-    cooldown = useRef(0);
+    cooldown = useRef(0),
+    liveControlsDisabled = Boolean(
+      busy ||
+      !online ||
+      p?.archived ||
+      editTarget ||
+      production.cache ||
+      scenesState.cache ||
+      !production.loaded ||
+      !scenesState.loaded ||
+      production.error ||
+      scenesState.error,
+    ),
+    readinessRole = roles.find((role) => role.id === p?.controllerReadyRoleId),
+    readiness = controllerReadiness(
+      p?.controllerReadyRoleId,
+      roles,
+      next?.id,
+      readyState.value,
+      online &&
+        !busy &&
+        production.loaded &&
+        rolesState.loaded &&
+        scenesState.loaded &&
+        readyState.loaded &&
+        !production.cache &&
+        !rolesState.cache &&
+        !scenesState.cache &&
+        !readyState.cache &&
+        !production.error &&
+        !rolesState.error &&
+        !scenesState.error &&
+        !readyState.error,
+    );
   useEffect(() => {
     let cancelled = false;
     setInvite(null);
@@ -141,11 +181,15 @@ export function Admin({ onExit }: { onExit: () => void }) {
     });
   }
   async function go(target: string) {
-    if (!p || p.archived || busy || Date.now() < cooldown.current) return;
+    if (!p || liveControlsDisabled || Date.now() < cooldown.current) return;
     cooldown.current = Date.now() + 1200;
     await action(() =>
       advance(selected, target, p.liveRevision, p.liveSceneId),
     );
+  }
+  function openEditor(sceneId: string, roleId: string) {
+    setSelectedId(selected);
+    setEditTarget({ productionId: selected, sceneId, roleId });
   }
   const link = invite
     ? `${window.location.origin}/?join=${encodeURIComponent(invite)}`
@@ -221,7 +265,7 @@ export function Admin({ onExit }: { onExit: () => void }) {
               value={selected}
               onChange={(e) => {
                 setSelectedId(e.target.value);
-                setPreviewId("");
+                setSelectedSceneId("");
               }}
             >
               {productions.map((item) => (
@@ -308,9 +352,10 @@ export function Admin({ onExit }: { onExit: () => void }) {
                     </div>
                   </div>
                   <p className="fineprint" id="controller-navigation-help">
-                    Previous and Next preview browse scene information. GO
-                    advances the live show on every connected backstage screen.
-                    READY is informational and does not block GO.
+                    Previous Scene and Next Scene move the live show on every
+                    connected backstage screen. The centre light shows your
+                    selected team's readiness for the upcoming scene. READY is
+                    informational and does not block Next Scene.
                   </p>
                 </section>
                 <section className="panel readiness">
@@ -323,6 +368,35 @@ export function Admin({ onExit }: { onExit: () => void }) {
                       {next?.title ?? "No next scene"}
                     </span>
                   </div>
+                  <label className="controller-ready-setting">
+                    <span>Bottom bar readiness role</span>
+                    <select
+                      aria-label="Bottom bar readiness role"
+                      value={readinessRole?.id ?? ""}
+                      disabled={
+                        busy ||
+                        !online ||
+                        Boolean(editTarget) ||
+                        production.cache ||
+                        rolesState.cache
+                      }
+                      onChange={(event) => {
+                        const roleId = event.target.value;
+                        void action(() =>
+                          updateDoc(refs.production(selected), {
+                            controllerReadyRoleId: roleId || null,
+                          }),
+                        );
+                      }}
+                    >
+                      <option value="">Choose your front stage role</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="readiness-grid">
                     {roles.map((role) => {
                       const hasInfo = notesState.value.some(
@@ -337,15 +411,17 @@ export function Admin({ onExit }: { onExit: () => void }) {
                       return (
                         <div className="readiness-row" key={role.id}>
                           <span
-                            className={`status-dot ${!hasInfo ? "neutral" : ready ? "on" : "off"}`}
+                            className={`status-dot ${!next ? "neutral" : ready ? "on" : !hasInfo ? "neutral" : "off"}`}
                           />
                           <strong>{role.name}</strong>
                           <span className={ready ? "ready-text" : "muted"}>
-                            {!next || !hasInfo
+                            {!next
                               ? "Not required"
                               : ready
                                 ? "READY"
-                                : "Waiting"}
+                                : !hasInfo
+                                  ? "Not required"
+                                  : "Waiting"}
                           </span>
                         </div>
                       );
@@ -369,8 +445,20 @@ export function Admin({ onExit }: { onExit: () => void }) {
                     {scenes.map((s, i) => (
                       <button
                         key={s.id}
-                        className={`running-row ${s.id === p.liveSceneId ? "live-row" : ""} ${s.id === preview?.id ? "preview-row" : ""}`}
-                        onClick={() => setPreviewId(s.id)}
+                        className={`running-row ${s.id === p.liveSceneId ? "live-row" : ""}`}
+                        aria-current={
+                          s.id === p.liveSceneId ? "step" : undefined
+                        }
+                        disabled={liveControlsDisabled}
+                        onClick={() => {
+                          if (
+                            s.id !== p.liveSceneId &&
+                            confirm(
+                              `Move the live show to Scene ${i + 1} — ${s.title} on all devices?`,
+                            )
+                          )
+                            void go(s.id);
+                        }}
                       >
                         <span className="running-index">
                           {String(i + 1).padStart(2, "0")}
@@ -383,62 +471,23 @@ export function Admin({ onExit }: { onExit: () => void }) {
                     ))}
                   </div>
                 </section>
-                <section className="panel rehearsal">
-                  <span className="eyebrow">REHEARSAL CONTROLS</span>
-                  <h3>Move the show</h3>
-                  <p>Previewing a row above does not change the live scene.</p>
-                  <div className="button-row">
-                    <button
-                      className="button secondary"
-                      disabled={liveIndex <= 0 || busy}
-                      onClick={() => go(scenes[liveIndex - 1].id)}
-                    >
-                      <ArrowLeft size={16} /> Back one
-                    </button>
-                    <button
-                      className="button secondary"
-                      disabled={!scenes.length || busy}
-                      onClick={() => {
-                        if (confirm("Reset the live show to the first scene?"))
-                          void go(scenes[0].id);
-                      }}
-                    >
-                      <RotateCcw size={16} /> Reset
-                    </button>
-                  </div>
-                  <button
-                    className="button ghost full"
-                    disabled={!preview || preview.id === p.liveSceneId || busy}
-                    onClick={() => {
-                      if (
-                        preview &&
-                        confirm(
-                          `Make Scene ${scenes.indexOf(preview) + 1} — ${preview.title} live on all devices?`,
-                        )
-                      )
-                        void go(preview.id);
-                    }}
-                  >
-                    Make previewed scene live
-                  </button>
-                </section>
               </div>
             </div>
-            {preview && (
+            {scene && (
               <section className="panel preview-details">
                 <div className="panel-heading">
                   <div>
                     <span className="eyebrow">
-                      CONTROLLER PREVIEW · SCENE {scenes.indexOf(preview) + 1}
+                      LIVE · SCENE {scenes.indexOf(scene) + 1}
                     </span>
-                    <h3>{preview.title}</h3>
+                    <h3>{scene.title}</h3>
                   </div>
                   <span className="muted">All role information</span>
                 </div>
                 <div className="role-preview-grid">
                   {roles.map((r) => {
                     const n = notesState.value.find(
-                      (x) => x.sceneId === preview.id && x.roleId === r.id,
+                      (x) => x.sceneId === scene.id && x.roleId === r.id,
                     );
                     return (
                       <div key={r.id} className="role-preview">
@@ -454,7 +503,7 @@ export function Admin({ onExit }: { onExit: () => void }) {
                         ))}
                         <button
                           className="text-button"
-                          onClick={() => setEditRole(r.id)}
+                          onClick={() => openEditor(scene.id, r.id)}
                         >
                           Edit information <Edit3 size={14} />
                         </button>
@@ -899,8 +948,8 @@ export function Admin({ onExit }: { onExit: () => void }) {
               </div>
               <div className="inline-form">
                 <select
-                  value={preview?.id ?? ""}
-                  onChange={(e) => setPreviewId(e.target.value)}
+                  value={scene?.id ?? ""}
+                  onChange={(e) => setSelectedSceneId(e.target.value)}
                   aria-label="Choose scene to edit"
                 >
                   {scenes.map((s, i) => (
@@ -913,7 +962,7 @@ export function Admin({ onExit }: { onExit: () => void }) {
               <div className="role-preview-grid">
                 {roles.map((r) => {
                   const n = notesState.value.find(
-                    (x) => x.sceneId === preview?.id && x.roleId === r.id,
+                    (x) => x.sceneId === scene?.id && x.roleId === r.id,
                   );
                   return (
                     <div className="role-preview" key={r.id}>
@@ -921,8 +970,8 @@ export function Admin({ onExit }: { onExit: () => void }) {
                       <p>{n?.notes || "No instructions for this scene."}</p>
                       <button
                         className="text-button"
-                        disabled={!preview}
-                        onClick={() => setEditRole(r.id)}
+                        disabled={!scene}
+                        onClick={() => scene && openEditor(scene.id, r.id)}
                       >
                         Edit <Edit3 size={14} />
                       </button>
@@ -1021,68 +1070,81 @@ export function Admin({ onExit }: { onExit: () => void }) {
             aria-describedby="controller-navigation-help"
           >
             <button
-              aria-label="Previous preview scene"
-              disabled={previewIndex <= 0 || Boolean(editRole)}
-              onClick={() => setPreviewId(scenes[previewIndex - 1].id)}
+              aria-label="Previous scene"
+              disabled={liveIndex <= 0 || liveControlsDisabled}
+              onClick={() => liveIndex > 0 && go(scenes[liveIndex - 1].id)}
             >
               <ArrowLeft size={18} />
               <span>
-                PREVIOUS<small>PREVIEW</small>
+                PREVIOUS<small>SCENE</small>
               </span>
             </button>
-            <button
-              className="controller-go"
-              disabled={
-                !next ||
-                busy ||
-                !online ||
-                p.archived ||
-                Boolean(editRole) ||
-                production.cache ||
-                scenesState.cache
-              }
-              onClick={() => next && go(next.id)}
+            <div
+              className={`controller-readiness ${readiness === "ready" ? "is-ready" : ""}`}
+              role="status"
+              aria-live="polite"
+              aria-label={`Upcoming scene readiness${readinessRole ? `: ${readinessRole.name}` : ""}`}
             >
+              <span className="ready-light" aria-hidden="true" />
               <span>
-                {busy ? "SENDING…" : next ? "GO / NEXT SCENE" : "SHOW END"}
+                {readiness === "ready"
+                  ? "READY"
+                  : readiness === "not-ready"
+                    ? "NOT READY"
+                    : readiness === "show-end"
+                      ? "SHOW END"
+                      : readiness === "no-role"
+                        ? "SELECT ROLE"
+                        : !online
+                          ? "OFFLINE"
+                          : "CHECKING…"}
+                {readinessRole && (
+                  <small
+                    className="controller-ready-role"
+                    title={readinessRole.name}
+                  >
+                    {readinessRole.name}
+                  </small>
+                )}
                 <small>
                   {next
-                    ? `LIVE → SCENE ${scenes.indexOf(next) + 1}`
+                    ? readiness === "no-role"
+                      ? "IN TEAM READINESS"
+                      : `FOR SCENE ${scenes.indexOf(next) + 1}`
                     : "END OF RUNNING ORDER"}
                 </small>
               </span>
-            </button>
+            </div>
             <button
-              aria-label="Next preview scene"
-              disabled={
-                previewIndex < 0 ||
-                previewIndex >= scenes.length - 1 ||
-                Boolean(editRole)
-              }
-              onClick={() => setPreviewId(scenes[previewIndex + 1].id)}
+              className="controller-next"
+              aria-label="Next scene"
+              disabled={!next || liveControlsDisabled}
+              onClick={() => next && go(next.id)}
             >
               <span>
-                NEXT<small>PREVIEW</small>
+                NEXT<small>SCENE</small>
               </span>
               <ArrowRight size={18} />
             </button>
           </nav>
         )}
       </div>
-      {editRole && preview && (
+      {editTarget && (
         <SceneEditor
-          key={`${preview.id}_${editRole}`}
-          productionId={selected}
-          sceneId={preview.id}
-          roleId={editRole}
+          key={`${editTarget.productionId}_${editTarget.sceneId}_${editTarget.roleId}`}
+          productionId={editTarget.productionId}
+          sceneId={editTarget.sceneId}
+          roleId={editTarget.roleId}
           performers={performersState.value}
           note={
             notesState.value.find(
-              (n) => n.sceneId === preview.id && n.roleId === editRole,
+              (n) =>
+                n.sceneId === editTarget.sceneId &&
+                n.roleId === editTarget.roleId,
             ) ?? null
           }
-          onClose={() => setEditRole("")}
-          onSaved={() => setEditRole("")}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => setEditTarget(null)}
         />
       )}
     </div>

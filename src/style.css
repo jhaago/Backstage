@@ -662,7 +662,8 @@ select {
   box-shadow: 0 -12px 30px #02070ec9;
   z-index: 5;
 }
-.bottom-nav button {
+.bottom-nav button,
+.bottom-nav .controller-readiness {
   border: 1px solid #3b4855;
   border-radius: 11px;
   background: #26313d;
@@ -689,6 +690,29 @@ select {
   gap: 6px;
   font-size: clamp(0.58rem, 1.6vw, 0.78rem);
 }
+.controller-nav .controller-readiness {
+  min-width: 0;
+  padding: 6px;
+  text-align: center;
+}
+.controller-readiness > span:last-child {
+  min-width: 0;
+}
+.controller-ready-role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.controller-ready-setting {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: #aab5bf;
+  font-size: 0.8rem;
+}
+.controller-ready-setting select {
+  width: 100%;
+}
 .controller-nav button svg {
   flex: none;
 }
@@ -698,22 +722,23 @@ select {
   letter-spacing: 0.06em;
   margin-top: 5px;
 }
-.bottom-nav .controller-go {
+.bottom-nav .controller-next {
   background: #d8ab65;
   border-color: #e8be7e;
   color: #172020;
-  font-size: clamp(0.66rem, 1.8vw, 0.95rem);
 }
-.bottom-nav .controller-go:hover:not(:disabled) {
+.bottom-nav .controller-next:hover:not(:disabled) {
   background: #eec17c;
 }
-.bottom-nav .ready-control {
+.bottom-nav .ready-control,
+.bottom-nav .controller-readiness {
   background: #2c3236;
   border-color: #5d676b;
   color: #e8eae3;
   gap: 8px;
 }
-.ready-control.is-ready {
+.ready-control.is-ready,
+.controller-readiness.is-ready {
   background: #164933;
   border-color: #55c985;
   color: #effff5;
@@ -973,7 +998,6 @@ select {
 }
 .readiness,
 .running,
-.rehearsal,
 .preview-details,
 .setup-content > .panel,
 .setup-grid > .panel {
@@ -1038,8 +1062,7 @@ select {
   width: 100%;
   border-radius: 7px;
 }
-.running-row:hover,
-.running-row.preview-row {
+.running-row:hover {
   background: #2b3744;
 }
 .running-row.live-row {
@@ -1060,19 +1083,12 @@ select {
   font-weight: 800;
   letter-spacing: 0.08em;
 }
-.rehearsal p {
-  color: #96a5b2;
-  font-size: 0.8rem;
-}
 .button-row,
 .settings-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 10px 0;
-}
-.rehearsal .full {
-  margin-top: 5px;
 }
 .role-preview-grid {
   display: grid;
