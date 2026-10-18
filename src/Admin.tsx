@@ -100,6 +100,7 @@ export function Admin({ onExit }: { onExit: () => void }) {
     following = next ? nextScene(scenes, next.id) : null,
     preview =
       scenes.find((s) => s.id === previewId) ?? scenes[liveIndex] ?? scenes[0],
+    previewIndex = scenes.findIndex((s) => s.id === preview?.id),
     online = useOnline(),
     cooldown = useRef(0);
   useEffect(() => {
@@ -191,7 +192,9 @@ export function Admin({ onExit }: { onExit: () => void }) {
           </button>
         </div>
       </aside>
-      <div className="admin-main">
+      <div
+        className={`admin-main ${p && tab === "control" ? "has-controller-nav" : ""}`}
+      >
         <header className="admin-top">
           <div>
             <span className="eyebrow gold">
@@ -304,19 +307,10 @@ export function Admin({ onExit }: { onExit: () => void }) {
                       </strong>
                     </div>
                   </div>
-                  <button
-                    className="go-button"
-                    disabled={!next || busy || !online || p.archived}
-                    onClick={() => next && go(next.id)}
-                  >
-                    <span>
-                      <small>ADVANCE THE LIVE SHOW</small>GO / NEXT SCENE
-                    </span>
-                    <ArrowRight size={28} />
-                  </button>
-                  <p className="fineprint">
-                    Updates every connected backstage screen. READY is
-                    informational and does not block GO.
+                  <p className="fineprint" id="controller-navigation-help">
+                    Previous and Next preview browse scene information. GO
+                    advances the live show on every connected backstage screen.
+                    READY is informational and does not block GO.
                   </p>
                 </section>
                 <section className="panel readiness">
@@ -1019,6 +1013,60 @@ export function Admin({ onExit }: { onExit: () => void }) {
               </div>
             </section>
           </div>
+        )}
+        {p && tab === "control" && (
+          <nav
+            className="bottom-nav controller-nav"
+            aria-label="Show controller controls"
+            aria-describedby="controller-navigation-help"
+          >
+            <button
+              aria-label="Previous preview scene"
+              disabled={previewIndex <= 0 || Boolean(editRole)}
+              onClick={() => setPreviewId(scenes[previewIndex - 1].id)}
+            >
+              <ArrowLeft size={18} />
+              <span>
+                PREVIOUS<small>PREVIEW</small>
+              </span>
+            </button>
+            <button
+              className="controller-go"
+              disabled={
+                !next ||
+                busy ||
+                !online ||
+                p.archived ||
+                Boolean(editRole) ||
+                production.cache ||
+                scenesState.cache
+              }
+              onClick={() => next && go(next.id)}
+            >
+              <span>
+                {busy ? "SENDING…" : next ? "GO / NEXT SCENE" : "SHOW END"}
+                <small>
+                  {next
+                    ? `LIVE → SCENE ${scenes.indexOf(next) + 1}`
+                    : "END OF RUNNING ORDER"}
+                </small>
+              </span>
+            </button>
+            <button
+              aria-label="Next preview scene"
+              disabled={
+                previewIndex < 0 ||
+                previewIndex >= scenes.length - 1 ||
+                Boolean(editRole)
+              }
+              onClick={() => setPreviewId(scenes[previewIndex + 1].id)}
+            >
+              <span>
+                NEXT<small>PREVIEW</small>
+              </span>
+              <ArrowRight size={18} />
+            </button>
+          </nav>
         )}
       </div>
       {editRole && preview && (

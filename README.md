@@ -21,6 +21,7 @@ For local development use `npm run dev`. Firebase Auth must allow your localhost
 
 - In **Production setup**, create or switch productions; set the active one, rename, archive, duplicate, or copy roles from another production. Add/reorder/rename/remove roles and scenes. Scene numbers follow their order. Add performers once and assign them within each role's scene editor.
 - The **Show controller** shows the live, next and following scenes. **GO / NEXT SCENE** changes the one global live scene and brings volunteer screens back to it. The controller can advance regardless of READY.
+- Its permanent bottom bar has **Previous preview**, **GO / NEXT SCENE**, and **Next preview**. The side buttons browse only the controller's preview; the centre button advances from the live scene, regardless of the preview. GO is disabled while editing, disconnected, archived, loading cached state, or at the end of the running order.
 - Clicking a running-order row only previews it. **Make previewed scene live** is a separate confirmed rehearsal action. Back one and Reset are available below the running order.
 - A role without performers or instructions for the upcoming scene shows **Not required** on the controller. READY otherwise reads from that role and upcoming scene only.
 - The private link is a bearer credential. **Replace link** revokes the old link and associated sessions on their next server request; distribute the new link to volunteers.

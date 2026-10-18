@@ -680,6 +680,33 @@ select {
 .bottom-nav button:active {
   transform: translateY(1px);
 }
+.controller-nav {
+  left: 232px;
+  grid-template-columns: minmax(0, 1fr) minmax(125px, 1.4fr) minmax(0, 1fr);
+}
+.controller-nav button {
+  min-width: 0;
+  gap: 6px;
+  font-size: clamp(0.58rem, 1.6vw, 0.78rem);
+}
+.controller-nav button svg {
+  flex: none;
+}
+.controller-nav small {
+  display: block;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  margin-top: 5px;
+}
+.bottom-nav .controller-go {
+  background: #d8ab65;
+  border-color: #e8be7e;
+  color: #172020;
+  font-size: clamp(0.66rem, 1.8vw, 0.95rem);
+}
+.bottom-nav .controller-go:hover:not(:disabled) {
+  background: #eec17c;
+}
 .bottom-nav .ready-control {
   background: #2c3236;
   border-color: #5d676b;
@@ -872,6 +899,9 @@ select {
   max-width: 1530px;
   margin: auto;
 }
+.has-controller-nav .control-content {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
 .control-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
@@ -880,6 +910,7 @@ select {
 .control-primary,
 .control-secondary {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 17px;
 }
@@ -936,32 +967,6 @@ select {
 }
 .upcoming-grid strong {
   font-size: 0.85rem;
-}
-.go-button {
-  width: 100%;
-  min-height: 82px;
-  border: 0;
-  background: #d8ab65;
-  color: #172020;
-  border-radius: 12px;
-  padding: 17px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-align: left;
-  font-family: Manrope, sans-serif;
-  font-size: 1.25rem;
-  font-weight: 800;
-}
-.go-button:hover {
-  background: #eec17c;
-}
-.go-button small {
-  font-family: "DM Sans", sans-serif;
-  letter-spacing: 0.12em;
-  display: block;
-  font-size: 0.62rem;
-  margin-bottom: 4px;
 }
 .live-panel .fineprint {
   margin: 13px 0 0;
@@ -1210,11 +1215,18 @@ select {
   flex-wrap: wrap;
 }
 @media (max-width: 960px) {
+  .controller-nav {
+    left: 70px;
+  }
   .sidebar {
     width: 70px;
   }
   .brand-block {
     padding: 0;
+  }
+  .brand-block .wordmark,
+  .sidebar-label {
+    display: none;
   }
   .brand-block .wordmark,
   .sidebar-label,
@@ -1233,7 +1245,7 @@ select {
     font-size: 0;
   }
   .control-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .control-secondary {
     grid-template-columns: 1fr 1fr;
@@ -1243,6 +1255,9 @@ select {
   }
 }
 @media (max-width: 650px) {
+  .controller-nav {
+    left: 0;
+  }
   .admin-shell {
     display: block;
   }
@@ -1296,7 +1311,7 @@ select {
   }
   .control-secondary,
   .setup-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .readiness-grid {
     grid-template-columns: 1fr;
