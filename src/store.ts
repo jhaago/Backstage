@@ -272,14 +272,27 @@ export async function setReady(
   s: string,
   r: string,
   expectedLiveId: string | null,
+  expectedRevision: number,
   desiredReady: boolean,
 ) {
   await runTransaction(db, async (tx) => {
     const production = await tx.get(refs.production(p));
-    if (production.data()?.liveSceneId !== expectedLiveId)
-      throw new Error("The live scene changed. Check the new upcoming scene.");
+    if (!production.exists()) throw new Error("Production no longer exists.");
+    const current = production.data() as Production;
+    if (
+      current.liveSceneId !== expectedLiveId ||
+      current.liveRevision !== expectedRevision
+    )
+      throw new Error(
+        "The live scene changed. Check the new upcoming scene before confirming READY.",
+      );
     const ref = refs.status(p, s, r);
-    tx.set(ref, { sceneId: s, roleId: r, ready: desiredReady });
+    tx.set(ref, {
+      sceneId: s,
+      roleId: r,
+      ready: desiredReady,
+      liveRevision: expectedRevision,
+    });
   });
 }
 export async function setActiveProduction(p: string | null) {

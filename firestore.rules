@@ -38,7 +38,7 @@ service cloud.firestore {
    match /ready/{id} {
     allow get: if admin() || (member(p) && id.matches('.*_' + selected(p)));
     allow list: if admin();
-    allow create,update: if (admin() || ownRole(p,request.resource.data.roleId)) && request.resource.data.keys().hasOnly(['sceneId','roleId','ready']) && request.resource.data.ready is bool && id==request.resource.data.sceneId+'_'+request.resource.data.roleId && exists(/databases/$(database)/documents/productions/$(p)/scenes/$(request.resource.data.sceneId));
+    allow create,update: if (admin() || ownRole(p,request.resource.data.roleId)) && request.resource.data.keys().hasOnly(['sceneId','roleId','ready','liveRevision']) && request.resource.data.liveRevision is int && request.resource.data.liveRevision==getAfter(/databases/$(database)/documents/productions/$(p)).data.liveRevision && request.resource.data.ready is bool && id==request.resource.data.sceneId+'_'+request.resource.data.roleId && exists(/databases/$(database)/documents/productions/$(p)/scenes/$(request.resource.data.sceneId));
     allow delete: if admin();
    }
   }

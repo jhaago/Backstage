@@ -1,4 +1,12 @@
-import { beforeAll, afterAll, beforeEach, describe, it } from "vitest";
+import {
+  beforeAll,
+  afterAll,
+  beforeEach,
+  describe,
+  it,
+  vi,
+  expect,
+} from "vitest";
 import {
   initializeTestEnvironment,
   assertFails,
@@ -18,6 +26,15 @@ import {
   disableNetwork,
   enableNetwork,
 } from "firebase/firestore";
+// Only replace the app's configured client: transactions and Firestore are real.
+const client = vi.hoisted(() => ({ db: undefined as any }));
+vi.mock("../src/firebase", () => ({
+  get db() {
+    return client.db;
+  },
+  auth: {},
+}));
+import { advance, setReady } from "../src/store";
 const run = process.env.FIRESTORE_EMULATOR_HOST ? describe : describe.skip;
 let env: RulesTestEnvironment;
 run("Firestore access rules", () => {
@@ -104,11 +121,64 @@ run("Firestore access rules", () => {
         sceneId: "opening",
         roleId: "props",
         ready: true,
+        liveRevision: 1,
       }),
     );
     await assertSucceeds(
       getDoc(doc(b, "productions", "show", "ready", "opening_props")),
     );
+  });
+  it("requires a fresh READY confirmation after every live scene revision", async () => {
+    const admin = env.authenticatedContext("admin1").firestore();
+    const volunteer = env.authenticatedContext("vol-a").firestore();
+    await setDoc(doc(volunteer, "productions", "show", "access", "vol-a"), {
+      invitationId: "private-token",
+      roleId: "props",
+    });
+    const status = doc(
+      volunteer,
+      "productions",
+      "show",
+      "ready",
+      "opening_props",
+    );
+    const confirmation = { sceneId: "opening", roleId: "props", ready: true };
+    await assertFails(setDoc(status, confirmation));
+    await assertSucceeds(setDoc(status, { ...confirmation, liveRevision: 1 }));
+    await updateDoc(doc(admin, "productions", "show"), { liveRevision: 2 });
+    await assertFails(setDoc(status, { ...confirmation, liveRevision: 1 }));
+    await assertSucceeds(setDoc(status, { ...confirmation, liveRevision: 2 }));
+  });
+  it("rejects an in-flight READY from before a controller round trip to the same scene", async () => {
+    const admin = env.authenticatedContext("admin1").firestore();
+    const volunteer = env.authenticatedContext("vol-a").firestore();
+    await setDoc(doc(volunteer, "productions", "show", "access", "vol-a"), {
+      invitationId: "private-token",
+      roleId: "props",
+    });
+    await setDoc(doc(admin, "productions", "show", "scenes", "arrival"), {
+      title: "Arrival",
+      order: 1,
+    });
+    client.db = volunteer;
+    await setReady("show", "arrival", "props", "opening", 1, true);
+    client.db = admin;
+    await advance("show", "arrival", 1, "opening");
+    await advance("show", "opening", 2, "arrival");
+    client.db = volunteer;
+    await expect(
+      setReady("show", "arrival", "props", "opening", 1, true),
+    ).rejects.toThrow(/live scene changed/i);
+    await setReady("show", "arrival", "props", "opening", 3, true);
+    const status = await getDoc(
+      doc(volunteer, "productions", "show", "ready", "arrival_props"),
+    );
+    expect(status.data()).toEqual({
+      sceneId: "arrival",
+      roleId: "props",
+      ready: true,
+      liveRevision: 3,
+    });
   });
   it("denies cross-role reads/writes and controller operations to volunteers", async () => {
     const db = env.authenticatedContext("vol-a").firestore();
@@ -225,6 +295,7 @@ run("Firestore access rules", () => {
       sceneId: "opening",
       roleId: "props",
       ready: true,
+      liveRevision: 1,
     });
     await readySeen;
     await assertSucceeds(

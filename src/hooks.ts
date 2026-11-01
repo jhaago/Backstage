@@ -25,8 +25,30 @@ type Many<T> = {
   error: string;
   loaded: boolean;
 };
+// Mobile browsers can suspend Firestore listeners or leave an errored listener
+// stopped. Reattach when the app wakes or connectivity returns.
+export function useResumeKey() {
+  const [key, setKey] = useState(0);
+  useEffect(() => {
+    const resume = () => {
+      if (document.visibilityState !== "hidden") setKey((value) => value + 1);
+    };
+    window.addEventListener("online", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.removeEventListener("online", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, []);
+  return key;
+}
 export function useDocument<T>(reference: DocumentReference | null) {
-  const path = reference?.path ?? "",
+  const resumeKey = useResumeKey(),
+    path = reference?.path ?? "",
     empty: One<T> = {
       path,
       value: null,
@@ -36,7 +58,11 @@ export function useDocument<T>(reference: DocumentReference | null) {
     };
   const [state, setState] = useState<One<T>>(empty);
   useEffect(() => {
-    setState({ path, value: null, cache: false, error: "", loaded: false });
+    setState((previous) =>
+      reference && previous.path === path
+        ? { ...previous, cache: true, error: "" }
+        : { path, value: null, cache: false, error: "", loaded: false },
+    );
     if (!reference) return;
     return listenDoc<T>(
       reference,
@@ -44,11 +70,12 @@ export function useDocument<T>(reference: DocumentReference | null) {
         setState({ path, value, cache, error: "", loaded: true }),
       (e) => setState((x) => ({ ...x, error: e.message, loaded: true })),
     );
-  }, [path]);
+  }, [path, resumeKey]);
   return state.path === path ? state : empty;
 }
 export function useCollection<T>(reference: CollectionReference | null) {
-  const path = reference?.path ?? "",
+  const resumeKey = useResumeKey(),
+    path = reference?.path ?? "",
     empty: Many<T> = {
       path,
       value: [],
@@ -58,7 +85,11 @@ export function useCollection<T>(reference: CollectionReference | null) {
     };
   const [state, setState] = useState<Many<T>>(empty);
   useEffect(() => {
-    setState({ path, value: [], cache: false, error: "", loaded: false });
+    setState((previous) =>
+      reference && previous.path === path
+        ? { ...previous, cache: true, error: "" }
+        : { path, value: [], cache: false, error: "", loaded: false },
+    );
     if (!reference) return;
     return listenList<T>(
       reference,
@@ -66,7 +97,7 @@ export function useCollection<T>(reference: CollectionReference | null) {
         setState({ path, value, cache, error: "", loaded: true }),
       (e) => setState((x) => ({ ...x, error: e.message, loaded: true })),
     );
-  }, [path]);
+  }, [path, resumeKey]);
   return state.path === path ? state : empty;
 }
 export function useOnline() {
