@@ -22,6 +22,7 @@ export type ReadinessStatus = {
   sceneId: string;
   roleId: string;
   ready: boolean;
+  liveRevision?: number;
 };
 export function controllerReadiness(
   roleId: string | null | undefined,
@@ -29,6 +30,7 @@ export function controllerReadiness(
   upcomingSceneId: string | null | undefined,
   statuses: ReadinessStatus[],
   synchronized: boolean,
+  liveRevision: number | undefined,
 ): "show-end" | "no-role" | "unavailable" | "ready" | "not-ready" {
   if (!upcomingSceneId) return "show-end";
   if (!roleId || !roles.some((role) => role.id === roleId)) return "no-role";
@@ -37,10 +39,21 @@ export function controllerReadiness(
     (status) =>
       status.roleId === roleId &&
       status.sceneId === upcomingSceneId &&
-      status.ready,
+      isReadyForRevision(status, liveRevision),
   )
     ? "ready"
     : "not-ready";
+}
+// A confirmation belongs to one controller transition, including repeat visits.
+export function isReadyForRevision(
+  status: Pick<ReadinessStatus, "ready" | "liveRevision"> | null | undefined,
+  liveRevision: number | undefined,
+): boolean {
+  return Boolean(
+    status?.ready &&
+    liveRevision !== undefined &&
+    status.liveRevision === liveRevision,
+  );
 }
 export const ordered = <T extends { order: number }>(items: T[]) =>
   [...items].sort((a, b) => a.order - b.order);

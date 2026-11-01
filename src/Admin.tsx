@@ -46,6 +46,8 @@ import {
   nextScene,
   duplicateNames,
   controllerReadiness,
+  isReadyForRevision,
+  type ReadinessStatus,
   type Production,
   type Role,
   type Scene,
@@ -91,11 +93,9 @@ export function Admin({ onExit }: { onExit: () => void }) {
     notesState = useCollection<RoleNote>(
       selected ? refs.notes(selected) : null,
     ),
-    readyState = useCollection<{
-      sceneId: string;
-      roleId: string;
-      ready: boolean;
-    }>(selected ? refs.ready(selected) : null);
+    readyState = useCollection<ReadinessStatus>(
+      selected ? refs.ready(selected) : null,
+    );
   const p = production.value,
     roles = ordered(rolesState.value),
     scenes = ordered(scenesState.value),
@@ -142,6 +142,7 @@ export function Admin({ onExit }: { onExit: () => void }) {
         !rolesState.error &&
         !scenesState.error &&
         !readyState.error,
+      p?.liveRevision,
     );
   useEffect(() => {
     let cancelled = false;
@@ -405,9 +406,20 @@ export function Admin({ onExit }: { onExit: () => void }) {
                           n.roleId === role.id &&
                           (n.notes.trim() || n.assignments.length),
                       );
-                      const ready = readyState.value.find(
-                        (r) => r.sceneId === next?.id && r.roleId === role.id,
-                      )?.ready;
+                      const ready =
+                        online &&
+                        !production.cache &&
+                        !production.error &&
+                        readyState.loaded &&
+                        !readyState.cache &&
+                        !readyState.error &&
+                        isReadyForRevision(
+                          readyState.value.find(
+                            (r) =>
+                              r.sceneId === next?.id && r.roleId === role.id,
+                          ),
+                          p?.liveRevision,
+                        );
                       return (
                         <div className="readiness-row" key={role.id}>
                           <span

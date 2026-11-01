@@ -10,13 +10,15 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useCollection, useDocument, useOnline } from "./hooks";
+import { useCollection, useDocument, useOnline, useResumeKey } from "./hooks";
 import { refs, joinRole, setReady } from "./store";
 import {
   ordered,
   nextScene,
   scenePosition,
   readyIntent,
+  isReadyForRevision,
+  type ReadinessStatus,
   type Production,
   type Role,
   type Scene,
@@ -46,7 +48,10 @@ export function Volunteer({
     [showOrder, setShowOrder] = useState(false),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
-  const lastRevision = useRef<number | null>(null),
+  const lastLive = useRef(""),
+    wasConnected = useRef(false),
+    resumeKey = useResumeKey(),
+    lastResumeKey = useRef(resumeKey),
     online = useOnline(),
     p = production.value,
     roles = ordered(rolesState.value),
@@ -58,7 +63,7 @@ export function Volunteer({
     note = useDocument<RoleNote>(
       role && view ? refs.note(productionId, view.id, role.id) : null,
     ),
-    ready = useDocument<{ ready: boolean }>(
+    ready = useDocument<ReadinessStatus>(
       role && upcoming ? refs.status(productionId, upcoming.id, role.id) : null,
     );
   useEffect(() => {
@@ -67,32 +72,54 @@ export function Volunteer({
       localStorage.removeItem(`backstage-role-${productionId}`);
     }
   }, [roleId, role, rolesState.loaded, productionId]);
+  const firstSceneId = scenes[0]?.id,
+    liveConnected = Boolean(
+      online && production.loaded && !production.cache && !production.error,
+    ),
+    readySynchronized = Boolean(
+      liveConnected &&
+      ready.loaded &&
+      !ready.cache &&
+      !ready.error &&
+      !scenesState.cache &&
+      !scenesState.error,
+    ),
+    currentlyReady =
+      readySynchronized && isReadyForRevision(ready.value, p?.liveRevision);
   useEffect(() => {
-    if (!p || !scenes.length) return;
-    if (lastRevision.current === null) {
-      lastRevision.current = p.liveRevision;
-      setViewId(p.liveSceneId ?? scenes[0].id);
-      return;
-    }
-    if (p.liveRevision !== lastRevision.current) {
-      lastRevision.current = p.liveRevision;
+    const reconnected = liveConnected && !wasConnected.current,
+      resumed = resumeKey !== lastResumeKey.current;
+    lastResumeKey.current = resumeKey;
+    wasConnected.current = liveConnected;
+    if (!p || !firstSceneId) return;
+    const live = `${productionId}:${roleId}:${p.liveRevision}:${p.liveSceneId}`;
+    if (
+      live !== lastLive.current ||
+      reconnected ||
+      resumed ||
+      (!editing && pendingId !== null)
+    ) {
+      lastLive.current = live;
+      const target = p.liveSceneId ?? firstSceneId;
       if (editing) {
-        setPendingId(p.liveSceneId);
+        setPendingId(target);
       } else {
-        setViewId(p.liveSceneId ?? scenes[0].id);
+        setViewId(target);
         setPendingId(null);
         setShowOrder(false);
       }
     }
-  }, [p?.liveRevision, p?.liveSceneId, scenesState.loaded, editing]);
-  useEffect(() => {
-    const resume = () => {
-      if (document.visibilityState === "visible" && p?.liveSceneId && !editing)
-        setViewId(p.liveSceneId);
-    };
-    document.addEventListener("visibilitychange", resume);
-    return () => document.removeEventListener("visibilitychange", resume);
-  }, [p?.liveSceneId, editing]);
+  }, [
+    productionId,
+    roleId,
+    pendingId,
+    p?.liveRevision,
+    p?.liveSceneId,
+    firstSceneId,
+    editing,
+    liveConnected,
+    resumeKey,
+  ]);
   const connection =
     online &&
     !production.cache &&
@@ -117,7 +144,6 @@ export function Volunteer({
     try {
       await joinRole(productionId, token, id);
       setRoleId(id);
-      setViewId(p?.liveSceneId ?? scenes[0]?.id ?? "");
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
@@ -126,13 +152,9 @@ export function Volunteer({
   }
   function closeEdit() {
     setEditing(false);
-    if (pendingId) {
-      setViewId(pendingId);
-      setPendingId(null);
-    }
   }
   async function toggle() {
-    if (!role || !upcoming || busy) return;
+    if (!p || !role || !upcoming || busy || !readySynchronized) return;
     setBusy(true);
     setNotice("");
     try {
@@ -141,7 +163,8 @@ export function Volunteer({
         upcoming.id,
         role.id,
         p?.liveSceneId ?? null,
-        readyIntent(Boolean(ready.value?.ready)),
+        p.liveRevision,
+        readyIntent(currentlyReady),
       );
     } catch (e) {
       setNotice((e as Error).message);
@@ -381,15 +404,15 @@ export function Volunteer({
           </span>
         </button>
         <button
-          className={`ready-control ${ready.value?.ready ? "is-ready" : ""}`}
+          className={`ready-control ${currentlyReady ? "is-ready" : ""}`}
           onClick={toggle}
-          disabled={!upcoming || !ready.loaded || busy || !online || editing}
+          disabled={!upcoming || !readySynchronized || busy || editing}
         >
           <span className="ready-light" />
           <span>
-            {!ready.loaded && upcoming
+            {!readySynchronized && upcoming
               ? "CHECKING…"
-              : ready.value?.ready
+              : currentlyReady
                 ? "READY"
                 : "NOT READY"}
             <small>
@@ -398,7 +421,7 @@ export function Volunteer({
                 : "SHOW END"}
             </small>
           </span>
-          {ready.value?.ready && <Check size={17} />}
+          {currentlyReady && <Check size={17} />}
         </button>
         <button
           onClick={() => setViewId(scenes[index + 1]?.id ?? viewId)}

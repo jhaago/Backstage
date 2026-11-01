@@ -9,19 +9,23 @@ const roles = [
 describe("controller readiness indicator", () => {
   it("only lights for the selected role and upcoming scene", () => {
     const statuses = [
-      { roleId: "stage", sceneId: "opening", ready: true },
-      { roleId: "choir", sceneId: "arrival", ready: true },
+      { roleId: "stage", sceneId: "opening", ready: true, liveRevision: 1 },
+      { roleId: "choir", sceneId: "arrival", ready: true, liveRevision: 1 },
     ];
-    expect(controllerReadiness("stage", roles, "arrival", statuses, true)).toBe(
-      "not-ready",
-    );
+    expect(
+      controllerReadiness("stage", roles, "arrival", statuses, true, 1),
+    ).toBe("not-ready");
     expect(
       controllerReadiness(
         "stage",
         roles,
         "arrival",
-        [...statuses, { roleId: "stage", sceneId: "arrival", ready: true }],
+        [
+          ...statuses,
+          { roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 },
+        ],
         true,
+        1,
       ),
     ).toBe("ready");
   });
@@ -32,8 +36,16 @@ describe("controller readiness indicator", () => {
         "stage",
         roles,
         "arrival",
-        [{ roleId: "stage", sceneId: "arrival", ready: false }],
+        [
+          {
+            roleId: "stage",
+            sceneId: "arrival",
+            ready: false,
+            liveRevision: 1,
+          },
+        ],
         true,
+        1,
       ),
     ).toBe("not-ready");
     expect(
@@ -41,8 +53,9 @@ describe("controller readiness indicator", () => {
         "stage",
         roles,
         "finale",
-        [{ roleId: "stage", sceneId: "arrival", ready: true }],
+        [{ roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 }],
         true,
+        1,
       ),
     ).toBe("not-ready");
   });
@@ -54,17 +67,18 @@ describe("controller readiness indicator", () => {
         "stage",
         renamed,
         "arrival",
-        [{ roleId: "stage", sceneId: "arrival", ready: true }],
+        [{ roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 }],
         true,
+        1,
       ),
     ).toBe("ready");
   });
 
   it("requires choosing a role if none is configured or the configured role is removed", () => {
-    expect(controllerReadiness(undefined, roles, "arrival", [], true)).toBe(
+    expect(controllerReadiness(undefined, roles, "arrival", [], true, 1)).toBe(
       "no-role",
     );
-    expect(controllerReadiness("removed", roles, "arrival", [], true)).toBe(
+    expect(controllerReadiness("removed", roles, "arrival", [], true, 1)).toBe(
       "no-role",
     );
   });
@@ -75,8 +89,9 @@ describe("controller readiness indicator", () => {
         "stage",
         roles,
         "arrival",
-        [{ roleId: "stage", sceneId: "arrival", ready: true }],
+        [{ roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 }],
         false,
+        1,
       ),
     ).toBe("unavailable");
   });
@@ -87,9 +102,42 @@ describe("controller readiness indicator", () => {
         "stage",
         roles,
         null,
-        [{ roleId: "stage", sceneId: "arrival", ready: true }],
+        [{ roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 }],
         true,
+        1,
       ),
     ).toBe("show-end");
   });
+});
+
+it("resets the controller light on each live revision even when returning to the same scene", () => {
+  const statuses = [
+    { roleId: "stage", sceneId: "arrival", ready: true, liveRevision: 1 },
+  ];
+  expect(
+    controllerReadiness("stage", roles, "arrival", statuses, true, 3),
+  ).toBe("not-ready");
+  expect(
+    controllerReadiness(
+      "stage",
+      roles,
+      "arrival",
+      [{ ...statuses[0], liveRevision: 3 }],
+      true,
+      3,
+    ),
+  ).toBe("ready");
+});
+
+it("ignores legacy READY records without a live revision", () => {
+  expect(
+    controllerReadiness(
+      "stage",
+      roles,
+      "arrival",
+      [{ roleId: "stage", sceneId: "arrival", ready: true }],
+      true,
+      1,
+    ),
+  ).toBe("not-ready");
 });
